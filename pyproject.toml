@@ -1,0 +1,30 @@
+[tool.poetry]
+name = "vehicles_rental"
+version = "0.1.0"
+description = "This is a rental car backend project for the Development of projects with free source university subject"
+authors = ["Isaias-tech <isaias-santiago-toribio@outlook.com>"]
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = "^3.12"
+Django = "^5.1.1"
+djangorestframework = "^3.15.2"
+dj-database-url = "^2.2.0"
+gunicorn = "^23.0.0"
+psycopg2 = "^2.9.9"
+django-cors-headers = "^4.4.0"
+whitenoise = "^6.7.0"
+python-dotenv = "^1.0.1"
+djangorestframework-simplejwt = "^5.3.1"
+
+[tool.poetry.group.dev.dependencies]
+black = "^24.8.0"
+flake8 = "^7.1.1"
+pre-commit = "^4.0.0"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
+
+[tool.black]
+line-length = 120
