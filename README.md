@@ -166,6 +166,12 @@ If a new URL path is added or an existing URL, view, model, or serializer is mod
 | `ALLOWED_HOSTS` | A comma-separated list of allowed host/domain names for your Django app. Example: `localhost,127.0.0.1`. |
 | `CORS_ALLOWED_ORIGINS` | A comma-separated list of origins allowed to make cross-site HTTP requests. Example: `http://localhost:3000`. |
 | `DATABASE_URL` | **Only for production** The database connection URL (typically for PostgreSQL). Example: `postgres://user:password@localhost:5432/mydb`. |
+| `MAILGUN_DOMAIN` | The domain used to send emails through Mailgun. This is the custom domain that was registered with Mailgun to send emails. |
+| `MAILGUN_API_KEY` | The **API key** provided by Mailgun to authenticate and send emails using the Mailgun service. |
+| `SERVER_DOMAIN` | The domain where the Django application is hosted. This is used in constructing absolute URLs, such as for sending email confirmation links. |
+| `BRAINTREE_ENVIRONMENT` | The environment for Braintree transactions, `Sandbox` for testing or `Production` for live transactions. |
+| `BRAINTREE_MERCHANT_ID` | The unique identifier for your Braintree merchant account. |
+| `BRAINTREE_PUBLIC_KEY` | The public key provided by Braintree for API authentication. |
 
 ## How to Install and Run the Project Locally
 
