@@ -8,15 +8,16 @@ This project uses the following technologies:
 
 ### Backend
 - **Python 3.12**: The programming language used for the backend.
-- **Poetry 1.8.3**: A python package manager for libraries.
+- **Poetry 1.8.3**: A dependency manager used to handle Python package installations and environments.
+- **Brain tree 4.30.0**: A library for integrating Braintree payment gateway into the project, allowing support for PayPal and credit card transactions.
 - **Django 5.1.1**: A high-level Python web framework used for building the web application and API.
 - **Django REST Framework (DRF) 3.15.2**: A powerful toolkit for building Web APIs in Django.
 - **Django REST Framework SimpleJWT 5.3.1**: Used for handling JWT-based authentication in the API.
 - **Gunicorn 23.0.0**: A Python WSGI HTTP server for running the Django application in production.
-- **Whitenoise 6.7.0**: Simplifies serving static files in production environments.
-- **CORS Headers 4.4.0**: Adds Cross-Origin Resource Sharing (CORS) support to Django for allowing cross-origin requests.
-- **Python-dotenv 1.0.1**: Used for managing environment variables.
-- **dj-database-url 2.2.0**: Simplifies the configuration of database URLs.
+- **Whitenoise 6.7.0**: A tool for managing and serving static files in a production environment.
+- **CORS Headers 4.4.0**: A Django extension for enabling Cross-Origin Resource Sharing (CORS), allowing the API to be accessed from other domains.
+- **Python-dotenv 1.0.1**:  A library for loading environment variables from a .env file.
+- **dj-database-url 2.2.0**: A helper library that simplifies setting up the database connection using a URL.
 
 ### Development
 - **Black 24.8.0**: A code formatter for enforcing consistent style across the Python codebase.
@@ -166,12 +167,14 @@ If a new URL path is added or an existing URL, view, model, or serializer is mod
 | `ALLOWED_HOSTS` | A comma-separated list of allowed host/domain names for your Django app. Example: `localhost,127.0.0.1`. |
 | `CORS_ALLOWED_ORIGINS` | A comma-separated list of origins allowed to make cross-site HTTP requests. Example: `http://localhost:3000`. |
 | `DATABASE_URL` | **Only for production** The database connection URL (typically for PostgreSQL). Example: `postgres://user:password@localhost:5432/mydb`. |
+| `FRONTEND_URL` | The frontend url. |
 | `MAILGUN_DOMAIN` | The domain used to send emails through Mailgun. This is the custom domain that was registered with Mailgun to send emails. |
 | `MAILGUN_API_KEY` | The **API key** provided by Mailgun to authenticate and send emails using the Mailgun service. |
 | `SERVER_DOMAIN` | The domain where the Django application is hosted. This is used in constructing absolute URLs, such as for sending email confirmation links. |
 | `BRAINTREE_ENVIRONMENT` | The environment for Braintree transactions, `Sandbox` for testing or `Production` for live transactions. |
 | `BRAINTREE_MERCHANT_ID` | The unique identifier for your Braintree merchant account. |
 | `BRAINTREE_PUBLIC_KEY` | The public key provided by Braintree for API authentication. |
+| `BRAINTREE_PRIVATE_KEY` | The private key provided by Braintree for API authentication. |
 
 ## How to Install and Run the Project Locally
 

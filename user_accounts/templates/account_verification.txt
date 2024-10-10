@@ -1,0 +1,8 @@
+Hi {{ user.first_name }},
+
+Please confirm your email by clicking the link below:
+
+{{ confirmation_url }}
+
+Thank you!
+The AI Vehicle Rental Team

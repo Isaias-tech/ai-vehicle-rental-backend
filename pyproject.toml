@@ -16,6 +16,9 @@ django-cors-headers = "^4.4.0"
 whitenoise = "^6.7.0"
 python-dotenv = "^1.0.1"
 djangorestframework-simplejwt = "^5.3.1"
+braintree = "^4.30.0"
+drf-standardized-errors = "^0.14.1"
+pillow = "^10.4.0"
 
 [tool.poetry.group.dev.dependencies]
 black = "^24.8.0"
