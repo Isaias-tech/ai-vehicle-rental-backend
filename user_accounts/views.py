@@ -100,14 +100,15 @@ class UserDataView(views.APIView):
     def get(self, request):
         user = request.user
 
-        if user.role.name in ["employee", "manager", "administrator"]:
-            if user.role.name == "administrator":
-                users = UserAccount.objects.all()
-            else:
-                users = UserAccount.objects.filter(is_active=True)
+        if user.role:
+            if user.role.name in ["employee", "manager", "administrator"]:
+                if user.role.name == "administrator":
+                    users = UserAccount.objects.all()
+                else:
+                    users = UserAccount.objects.filter(is_active=True)
 
-            serializer = UserAccountSerializer(users, many=True)
-            return Response(serializer.data, status=status.HTTP_200_OK)
+                serializer = UserAccountSerializer(users, many=True)
+                return Response(serializer.data, status=status.HTTP_200_OK)
 
         return Response({"error": "You do not have permission to access this data."}, status=status.HTTP_403_FORBIDDEN)
 
