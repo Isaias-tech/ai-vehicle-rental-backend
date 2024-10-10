@@ -109,7 +109,7 @@ class UserAccount(AbstractBaseUser, PermissionsMixin):
         self.is_verified = True
         self.confirmation_token = None
         self.save()
-    
+
 
 class UserAccountDetails(models.Model):
     user = models.OneToOneField(UserAccount, on_delete=models.CASCADE, related_name="account_details")

@@ -1,7 +1,10 @@
 from django.core.management.utils import get_random_secret_key
-import os, dj_database_url, sys, braintree
 from dotenv import load_dotenv
 from pathlib import Path
+import dj_database_url
+import braintree
+import sys
+import os
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent

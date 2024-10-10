@@ -99,7 +99,7 @@ class DeleteAccountConfirmSerializer(serializers.Serializer):
 
     def validate_token(self, value):
         try:
-            user = UserAccount.objects.get(confirmation_token=value)
+            UserAccount.objects.get(confirmation_token=value)
         except UserAccount.DoesNotExist:
             raise serializers.ValidationError("Invalid or expired token.")
         return value

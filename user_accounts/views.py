@@ -12,7 +12,7 @@ from .serializers import (
 )
 import logging
 
-logger = logging.getLogger(__name__) 
+logger = logging.getLogger(__name__)
 
 
 class LogoutView(views.APIView):
