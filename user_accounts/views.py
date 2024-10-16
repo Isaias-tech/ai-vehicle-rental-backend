@@ -51,7 +51,7 @@ def get_user_accounts(request):
         employee_group = Group.objects.get(name="Employee")
         client_group = Group.objects.get(name="Client")
 
-        if user.groups.filter(name="Admin").exists():
+        if user.groups.filter(name="Administrator").exists():
             users = UserAccount.objects.all()
         elif user.groups.filter(name="Manager").exists():
             users = UserAccount.objects.filter(role__group__in=[employee_group, client_group])
