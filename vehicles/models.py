@@ -1,0 +1,79 @@
+from django.db import models
+
+
+class VehicleBrand(models.Model):
+    id = models.AutoField(primary_key=True)
+    name = models.CharField(max_length=255, unique=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    is_deleted = models.BooleanField(default=False)
+
+    def __str__(self):
+        return self.name
+
+
+class VehicleModel(models.Model):
+    id = models.AutoField(primary_key=True)
+    name = models.CharField(max_length=255, unique=True)
+    brand = models.ForeignKey(VehicleBrand, on_delete=models.CASCADE)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    is_deleted = models.BooleanField(default=False)
+
+    def __str__(self):
+        return self.name
+
+
+class Vehicle(models.Model):
+    id = models.AutoField(primary_key=True)
+    name = models.CharField(max_length=255)
+    model = models.ForeignKey(VehicleModel, on_delete=models.CASCADE)
+    year = models.IntegerField()
+    color = models.CharField(max_length=255)
+    price = models.DecimalField(max_digits=10, decimal_places=2)
+    is_new = models.BooleanField(default=False)
+    image1 = models.ImageField(upload_to="vehicle_images/")
+    image2 = models.ImageField(upload_to="vehicle_images/", null=True, blank=True)
+    image3 = models.ImageField(upload_to="vehicle_images/", null=True, blank=True)
+    image4 = models.ImageField(upload_to="vehicle_images/", null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    is_deleted = models.BooleanField(default=False)
+
+    def __str__(self):
+        return f"{self.name} ({self.model.name})"
+
+
+class VehicleAvailability(models.Model):
+    id = models.AutoField(primary_key=True)
+    vehicle = models.ForeignKey(Vehicle, on_delete=models.CASCADE)
+    available_from = models.DateField()
+    available_until = models.DateField()
+    is_deleted = models.BooleanField(default=False)
+
+    def __str__(self):
+        return f"Availability for {self.vehicle.name} from {self.available_from} to {self.available_until}"
+
+
+class Pricing(models.Model):
+    id = models.AutoField(primary_key=True)
+    vehicle = models.ForeignKey(Vehicle, on_delete=models.CASCADE)
+    daily_rate = models.DecimalField(max_digits=10, decimal_places=2)
+    weekly_rate = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
+    monthly_rate = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
+    is_deleted = models.BooleanField(default=False)
+
+    def __str__(self):
+        return f"Pricing for {self.vehicle.name}: {self.daily_rate} per day"
+
+
+class VehicleReport(models.Model):
+    id = models.AutoField(primary_key=True)
+    vehicle = models.ForeignKey(Vehicle, on_delete=models.CASCADE)
+    mileage = models.IntegerField()
+    condition = models.TextField()
+    report_date = models.DateTimeField(auto_now_add=True)
+    is_deleted = models.BooleanField(default=False)
+
+    def __str__(self):
+        return f"Report for {self.vehicle.name} on {self.report_date}"

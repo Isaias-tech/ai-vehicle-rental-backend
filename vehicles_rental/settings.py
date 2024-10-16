@@ -44,6 +44,7 @@ INSTALLED_APPS = [
     "drf_standardized_errors",
     "rest_framework_simplejwt.token_blacklist",
     "user_accounts",
+    "vehicles",
 ]
 
 MIDDLEWARE = [
