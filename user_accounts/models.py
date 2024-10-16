@@ -19,8 +19,6 @@ class UserAccountManager(BaseUserManager):
         user.set_password(password)
         user.save(using=self._db)
 
-        user.send_verification_email()
-
         return user
 
     def create_superuser(self, email, password=None, **kwargs):
@@ -50,7 +48,7 @@ class Role(models.Model):
 
 
 class UserAccount(AbstractBaseUser, PermissionsMixin):
-    role = models.ForeignKey(Role, on_delete=models.SET_NULL, null=True, blank=True)
+    role = models.ForeignKey(Role, on_delete=models.CASCADE, null=True, blank=True)
     email = models.EmailField(unique=True, max_length=500)
     date_joined = models.DateTimeField(auto_now_add=True)
     first_name = models.CharField(max_length=255)
@@ -100,6 +98,7 @@ class UserAccount(AbstractBaseUser, PermissionsMixin):
 
     def soft_delete(self):
         self.is_active = False
+        self.confirmation_token = None
         self.email = self.email + "_deleted_" + get_random_string(10)
         self.save()
 
