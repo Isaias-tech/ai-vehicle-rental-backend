@@ -32,6 +32,8 @@ class VehicleSerializer(serializers.ModelSerializer):
             "color",
             "price",
             "is_new",
+            "available_from",
+            "available_until",
             "image1",
             "image2",
             "image3",
@@ -40,14 +42,6 @@ class VehicleSerializer(serializers.ModelSerializer):
             "updated_at",
             "is_deleted",
         ]
-
-
-class VehicleAvailabilitySerializer(serializers.ModelSerializer):
-    id = serializers.ReadOnlyField()
-
-    class Meta:
-        model = models.VehicleAvailability
-        fields = ["id", "vehicle", "available_from", "available_until"]
 
 
 class PricingSerializer(serializers.ModelSerializer):

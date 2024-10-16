@@ -5,6 +5,7 @@ from user_accounts.models import UserAccount
 from rest_framework import permissions
 from rest_framework import status
 from . import serializers, models
+from datetime import datetime
 
 
 @api_view(["POST"])
@@ -187,6 +188,48 @@ def create_vehicle(request):
     return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
+@api_view(["GET"])
+@permission_classes([permissions.IsAuthenticated])
+def get_vehicles(request):
+    vehicleId = request.query_params.get("vehicleId", None)
+    name_contains = request.query_params.get("name_contains", None)
+    from_date = request.query_params.get("from_date", None)
+    to_date = request.query_params.get("to_date", None)
+
+    if vehicleId:
+        vehicle = get_object_or_404(models.Vehicle, id=vehicleId)
+        if vehicle.is_deleted:
+            if not request.user.groups.filter(name__in=["Administrator", "Manager"]).exists():
+                return Response(
+                    {"error": "You do not have permission to access deleted items."}, status=status.HTTP_403_FORBIDDEN
+                )
+        serializer = serializers.VehicleSerializer(vehicle)
+        return Response(serializer.data)
+
+    vehicles = models.Vehicle.objects.filter(is_deleted=False)
+
+    if name_contains:
+        vehicles = vehicles.filter(name__icontains=name_contains)
+
+    if from_date or to_date:
+        try:
+            if from_date:
+                from_date_obj = datetime.strptime(from_date, "%Y-%m-%d").date()
+            if to_date:
+                to_date_obj = datetime.strptime(to_date, "%Y-%m-%d").date()
+        except ValueError:
+            return Response({"error": "Invalid date format. Use YYYY-MM-DD."}, status=status.HTTP_400_BAD_REQUEST)
+
+        if from_date and to_date:
+            vehicles = vehicles.filter(available_from__lte=from_date_obj, available_until__gte=to_date_obj)
+        elif from_date:
+            vehicles = vehicles.filter(available_from__lte=from_date_obj)
+        elif to_date:
+            vehicles = vehicles.filter(available_until__gte=to_date_obj)
+    serializer = serializers.VehicleSerializer(vehicles, many=True)
+    return Response(serializer.data)
+
+
 @api_view(["PATCH", "PUT"])
 @permission_classes([permissions.IsAuthenticated])
 def update_vehicle(request, vehicleId):
@@ -205,27 +248,6 @@ def update_vehicle(request, vehicleId):
     return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
-@api_view(["GET"])
-@permission_classes([permissions.IsAuthenticated])
-def get_vehicles(request):
-    vehicleId = request.query_params.get("vehicleId", None)
-
-    if vehicleId:
-        vehicle = get_object_or_404(models.Vehicle, id=vehicleId)
-        if vehicle.is_deleted:
-            if not request.user.groups.filter(name__in=["Administrator", "Manager"]).exists():
-                return Response(
-                    {"error": "You do not have permission to access deleted items."}, status=status.HTTP_403_FORBIDDEN
-                )
-
-        serializer = serializers.VehicleSerializer(vehicle)
-        return Response(serializer.data)
-
-    vehicles = models.Vehicle.objects.filter(is_deleted=False)
-    serializer = serializers.VehicleSerializer(vehicles, many=True)
-    return Response(serializer.data)
-
-
 @api_view(["DELETE"])
 @permission_classes([permissions.IsAuthenticated])
 def delete_vehicle(request, vehicleId):
@@ -239,78 +261,6 @@ def delete_vehicle(request, vehicleId):
     vehicle = get_object_or_404(models.Vehicle, id=vehicleId)
     vehicle.is_deleted = True
     vehicle.save()
-    return Response(status=status.HTTP_204_NO_CONTENT)
-
-
-@api_view(["POST"])
-@permission_classes([permissions.IsAuthenticated])
-def create_vehicle_availability(request):
-    user: UserAccount = request.user
-
-    if not user.groups.filter(name__in=["Administrator", "Manager"]).exists():
-        return Response(
-            {"error": "You do not have permission to perform this action"}, status=status.HTTP_403_FORBIDDEN
-        )
-
-    serializer = serializers.VehicleAvailabilitySerializer(data=request.data)
-    if serializer.is_valid():
-        serializer.save()
-        return Response(serializer.data, status=status.HTTP_201_CREATED)
-    return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-
-
-@api_view(["PATCH", "PUT"])
-@permission_classes([permissions.IsAuthenticated])
-def update_vehicle_availability(request, availabilityId):
-    user: UserAccount = request.user
-
-    if not user.groups.filter(name__in=["Administrator", "Manager"]).exists():
-        return Response(
-            {"error": "You do not have permission to perform this action"}, status=status.HTTP_403_FORBIDDEN
-        )
-
-    availability = get_object_or_404(models.VehicleAvailability, id=availabilityId)
-    serializer = serializers.VehicleAvailabilitySerializer(availability, data=request.data, partial=True)
-    if serializer.is_valid():
-        serializer.save()
-        return Response(serializer.data)
-    return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-
-
-@api_view(["GET"])
-@permission_classes([permissions.IsAuthenticated])
-def get_vehicle_availabilities(request):
-    availabilityId = request.query_params.get("availabilityId", None)
-
-    if availabilityId:
-        availability = get_object_or_404(models.VehicleAvailability, id=availabilityId)
-        if availability.is_deleted:
-            if not request.user.groups.filter(name__in=["Administrator", "Manager"]).exists():
-                return Response(
-                    {"error": "You do not have permission to access deleted items."}, status=status.HTTP_403_FORBIDDEN
-                )
-
-        serializer = serializers.VehicleAvailabilitySerializer(availability)
-        return Response(serializer.data)
-
-    availabilities = models.VehicleAvailability.objects.filter(is_deleted=False)
-    serializer = serializers.VehicleAvailabilitySerializer(availabilities, many=True)
-    return Response(serializer.data)
-
-
-@api_view(["DELETE"])
-@permission_classes([permissions.IsAuthenticated])
-def delete_vehicle_availability(request, availabilityId):
-    user: UserAccount = request.user
-
-    if not user.groups.filter(name__in=["Administrator", "Manager"]).exists():
-        return Response(
-            {"error": "You do not have permission to perform this action"}, status=status.HTTP_403_FORBIDDEN
-        )
-
-    availability = get_object_or_404(models.VehicleAvailability, id=availabilityId)
-    availability.is_deleted = True
-    availability.save()
     return Response(status=status.HTTP_204_NO_CONTENT)
 
 

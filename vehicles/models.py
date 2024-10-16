@@ -44,6 +44,8 @@ class Vehicle(models.Model):
     color = models.CharField(max_length=255)
     price = models.DecimalField(max_digits=10, decimal_places=2)
     is_new = models.BooleanField(default=False)
+    available_from = models.DateField(default=None)
+    available_until = models.DateField(default=None)
     image1 = models.ImageField(upload_to=wrapper)
     image2 = models.ImageField(upload_to=wrapper, null=True, blank=True)
     image3 = models.ImageField(upload_to=wrapper, null=True, blank=True)
@@ -54,17 +56,6 @@ class Vehicle(models.Model):
 
     def __str__(self):
         return f"{self.name} ({self.model.name})"
-
-
-class VehicleAvailability(models.Model):
-    id = models.AutoField(primary_key=True)
-    vehicle = models.ForeignKey(Vehicle, on_delete=models.CASCADE)
-    available_from = models.DateField()
-    available_until = models.DateField()
-    is_deleted = models.BooleanField(default=False)
-
-    def __str__(self):
-        return f"Availability for {self.vehicle.name} from {self.available_from} to {self.available_until}"
 
 
 class Pricing(models.Model):
