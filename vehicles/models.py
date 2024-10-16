@@ -1,3 +1,5 @@
+from django.forms import ValidationError
+from django.utils.crypto import get_random_string
 from django.db import models
 
 
@@ -24,6 +26,16 @@ class VehicleModel(models.Model):
         return self.name
 
 
+def wrapper(instance, filename):
+    ext = filename.split(".")[-1].lower()
+
+    if ext not in ["jpg", "png", "jpeg"]:
+        raise ValidationError(f"invalid image extension: {filename}")
+
+    filename = f"vehicle_images/{get_random_string(50)}.{ext}"
+    return filename
+
+
 class Vehicle(models.Model):
     id = models.AutoField(primary_key=True)
     name = models.CharField(max_length=255)
@@ -32,10 +44,10 @@ class Vehicle(models.Model):
     color = models.CharField(max_length=255)
     price = models.DecimalField(max_digits=10, decimal_places=2)
     is_new = models.BooleanField(default=False)
-    image1 = models.ImageField(upload_to="vehicle_images/")
-    image2 = models.ImageField(upload_to="vehicle_images/", null=True, blank=True)
-    image3 = models.ImageField(upload_to="vehicle_images/", null=True, blank=True)
-    image4 = models.ImageField(upload_to="vehicle_images/", null=True, blank=True)
+    image1 = models.ImageField(upload_to=wrapper)
+    image2 = models.ImageField(upload_to=wrapper, null=True, blank=True)
+    image3 = models.ImageField(upload_to=wrapper, null=True, blank=True)
+    image4 = models.ImageField(upload_to=wrapper, null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     is_deleted = models.BooleanField(default=False)

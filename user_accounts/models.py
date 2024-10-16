@@ -1,4 +1,5 @@
 from django.contrib.auth.models import AbstractBaseUser, BaseUserManager, PermissionsMixin
+from django.forms import ValidationError
 from django.utils.crypto import get_random_string
 from django.contrib.auth.models import Group
 from utils.send_emails import send_email
@@ -110,13 +111,23 @@ class UserAccount(AbstractBaseUser, PermissionsMixin):
         self.save()
 
 
+def wrapper(instance, filename):
+    ext = filename.split(".")[-1].lower()
+
+    if ext not in ["jpg", "png", "jpeg"]:
+        raise ValidationError(f"invalid image extension: {filename}")
+
+    filename = f"profile_pictures/{get_random_string(50)}.{ext}"
+    return filename
+
+
 class UserAccountDetails(models.Model):
     user = models.OneToOneField(UserAccount, on_delete=models.CASCADE, related_name="account_details")
-    profile_picture = models.ImageField(upload_to="profile_pictures/%Y/%m/%d/", blank=True, null=True)
+    profile_picture = models.ImageField(upload_to=wrapper, blank=True, null=True)
 
-    drivers_licence = models.ImageField(upload_to="drivers_licence/%Y/%m/%d/", blank=True, null=True)
-    passport = models.ImageField(upload_to="passport/%Y/%m/%d/", blank=True, null=True)
-    identity_card = models.ImageField(upload_to="identity_card/%Y/%m/%d/", blank=True, null=True)
+    drivers_licence = models.ImageField(upload_to=wrapper, blank=True, null=True)
+    passport = models.ImageField(upload_to=wrapper, blank=True, null=True)
+    identity_card = models.ImageField(upload_to=wrapper, blank=True, null=True)
 
     phone_number = models.CharField(max_length=255, blank=True, null=True)
     city = models.CharField(max_length=255, blank=True, null=True)

@@ -43,6 +43,7 @@ INSTALLED_APPS = [
     "rest_framework",
     "drf_standardized_errors",
     "rest_framework_simplejwt.token_blacklist",
+    "storages",
     "user_accounts",
     "vehicles",
     "reservations",
@@ -157,13 +158,39 @@ USE_I18N = True
 
 USE_TZ = True
 
-# Static files (CSS, JavaScript, Images)
-STATIC_URL = "static/"
-STATIC_ROOT = BASE_DIR / "staticfiles/"
+# Static files (served by WhiteNoise)
+STATIC_URL = "/static/"
+STATIC_ROOT = BASE_DIR / "staticfiles"
+STATICFILES_STORAGE = "whitenoise.storage.CompressedManifestStaticFilesStorage"
 
-# Media files (Images, Videos)
-MEDIA_URL = "media/"
-MEDIA_ROOT = BASE_DIR / "media/"
+# Media files (user-uploaded content)
+AWS_ACCESS_KEY_ID = os.getenv("SPACES_ACCESS_KEY")
+AWS_SECRET_ACCESS_KEY = os.getenv("SPACES_SECRET_KEY")
+AWS_STORAGE_BUCKET_NAME = "ai-vehicle-rental-images"
+AWS_S3_REGION_NAME = "nyc3"
+AWS_S3_ENDPOINT_URL = f"https://{AWS_S3_REGION_NAME}.digitaloceanspaces.com"
+AWS_S3_CUSTOM_DOMAIN = f"{AWS_STORAGE_BUCKET_NAME}.{AWS_S3_REGION_NAME}.cdn.digitaloceanspaces.com"
+
+MEDIA_URL = f"https://{AWS_S3_CUSTOM_DOMAIN}/"
+
+# STORAGES setting (Django 4.2+)
+STORAGES = {
+    "default": {
+        "BACKEND": "storages.backends.s3boto3.S3Boto3Storage",
+        "OPTIONS": {
+            "endpoint_url": AWS_S3_ENDPOINT_URL,  # Custom DigitalOcean Spaces endpoint
+            "default_acl": "public-read",
+        },
+    },
+    "staticfiles": {
+        "BACKEND": "whitenoise.storage.CompressedManifestStaticFilesStorage",
+    },
+}
+
+# AWS S3 Object Parameters (Optional)
+AWS_S3_OBJECT_PARAMETERS = {
+    "CacheControl": "max-age=86400",
+}
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
