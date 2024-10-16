@@ -60,7 +60,7 @@ def get_user_accounts(request):
         else:
             users = []
 
-        return Response([UserAccountSerializer(u) for u in users])
+        return Response([UserAccountSerializer(u).data for u in users])
     except Exception as e:
         return Response({"message": str(e)}, status=500)
 
