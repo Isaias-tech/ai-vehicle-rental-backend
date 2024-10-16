@@ -60,7 +60,21 @@ def get_user_accounts(request):
         else:
             users = []
 
-        return Response([UserAccountSerializer(u).data for u in users])
+        return Response(
+            [
+                {
+                    "email": u.email,
+                    "first_name": u.first_name,
+                    "last_name": u.last_name,
+                    "date_joined": u.date_joined,
+                    "is_verified": u.is_verified,
+                    "is_active": u.is_active,
+                    "role": u.role.name if u.role else None,
+                }
+                for u in users
+            ],
+            status=200,
+        )
     except Exception as e:
         return Response({"message": str(e)}, status=500)
 
