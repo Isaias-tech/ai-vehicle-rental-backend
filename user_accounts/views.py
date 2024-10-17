@@ -24,10 +24,24 @@ def logout(request):
 @api_view(["POST"])
 @permission_classes([AllowAny])
 def register(request):
+    user: UserAccount = request.user
     data = request.data
     serializer = UserAccountSerializer(data=data)
 
     serializer.is_valid(raise_exception=True)
+
+    if serializer.data.get("role") == "ADMINISTRATOR" and user.role != "ADMINISTRATOR":
+        return Response(
+            {"error": "You do not have permission to perform this action."}, status=status.HTTP_403_FORBIDDEN
+        )
+    elif serializer.data.get("role") == "MANAGER" and user.role not in ["ADMINISTRATOR", "MANAGER"]:
+        return Response(
+            {"error": "You do not have permission to perform this action."}, status=status.HTTP_403_FORBIDDEN
+        )
+    elif serializer.data.get("role") == "EMPLOYEE" and user.role not in ["MANAGER", "ADMINISTRATOR"]:
+        return Response(
+            {"error": "You do not have permission to perform this action."}, status=status.HTTP_403_FORBIDDEN
+        )
 
     serializer.save()
 
