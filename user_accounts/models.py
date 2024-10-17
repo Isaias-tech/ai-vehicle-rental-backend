@@ -106,7 +106,7 @@ class UserProfile(models.Model):
     profile_picture = models.ImageField(upload_to=wrapper, blank=True, null=True)
 
     passport = models.ImageField(upload_to=wrapper, blank=True, null=True)
-    drivers_licence = models.ImageField(upload_to=wrapper, blank=True, null=True)
+    drivers_license = models.ImageField(upload_to=wrapper, blank=True, null=True)
     national_id = models.ImageField(upload_to=wrapper, blank=True, null=True)
 
     phone_number = models.CharField(max_length=255, blank=True, null=True)
