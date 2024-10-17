@@ -1,196 +1,257 @@
-from .serializers import ReservationSerializer, TransactionSerializer
 from rest_framework.decorators import api_view, permission_classes
+from reservations.serializers import ReservationSerializer, TransactionSerializer
 from user_accounts.models import UserAccount
-from vehicles_rental.settings import gateway
-from .models import Reservation, Transaction
+from vehicles.serializers import VehicleDetailsSerializer
+from utils.braintree_utils import get_braintree_gateway
+from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
-from utils.send_emails import send_email
-from django.db.models import Sum, Count
-from rest_framework import permissions
+from .models import Reservation, Transaction
+from vehicles.models import VehicleDetails
+from django.db.models import Count, Sum
+from vehicles.models import Vehicle
 from rest_framework import status
+from django.utils import timezone
 from datetime import datetime
 
 
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def get_braintree_token(request):
+    gateway = get_braintree_gateway()
+    token = gateway.client_token.generate()
+    return Response({"token": token}, status=status.HTTP_200_OK)
+
+
 @api_view(["POST"])
-@permission_classes([permissions.IsAuthenticated])
-def create_transaction(request):
-    user: UserAccount = request.user
+@permission_classes([IsAuthenticated])
+def create_reservation(request):
+    user = request.user
+    vehicle_id = request.data.get("vehicle_id")
+    start_date_str = request.data.get("start_date")
+    end_date_str = request.data.get("end_date")
+    amount = request.data.get("amount")
+    payment_method_nonce = request.data.get("payment_method_nonce")
 
-    serializer = TransactionSerializer(data=request.data)
+    try:
+        # Parse the dates in MM/DD/YYYY format
+        start_date = datetime.strptime(start_date_str, "%m/%d/%Y")
+        end_date = datetime.strptime(end_date_str, "%m/%d/%Y")
 
-    if serializer.is_valid():
-        transaction = serializer.save()
+        # Make start_date and end_date timezone-aware (using the current timezone)
+        start_date = timezone.make_aware(start_date, timezone.get_current_timezone())
+        end_date = timezone.make_aware(end_date, timezone.get_current_timezone())
 
-        reservation = transaction.reservation
-        if reservation.status == "confirmed":
-            return Response(
-                {"error": "This reservation has already been confirmed and paid for."},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
+        vehicle = Vehicle.objects.get(id=vehicle_id)
+        if not vehicle.is_available:
+            return Response({"error": "Vehicle is not available."}, status=status.HTTP_400_BAD_REQUEST)
 
-        braintree_result = gateway.transaction.sale(
+        if timezone.now() >= start_date:
+            return Response({"error": "Start date must be in the future."}, status=status.HTTP_400_BAD_REQUEST)
+
+        if start_date >= end_date:
+            return Response({"error": "End date must be after the start date."}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Create the reservation
+        reservation = Reservation.objects.create(
+            user=user, vehicle=vehicle, start_date=start_date, end_date=end_date, is_active=True
+        )
+
+        # Process payment through Braintree
+        gateway = get_braintree_gateway()
+        result = gateway.transaction.sale(
             {
-                "amount": str(transaction.amount),
-                "payment_method_nonce": request.data.get("payment_method_nonce"),
+                "amount": str(amount),
+                "payment_method_nonce": payment_method_nonce,
                 "options": {"submit_for_settlement": True},
             }
         )
 
-        if braintree_result.is_success:
-            transaction.braintree_transaction_id = braintree_result.transaction.id
-            transaction.braintree_status = braintree_result.transaction.status
-            transaction.status = "completed"
-            transaction.save()
-
-            reservation = transaction.reservation
-            reservation.status = "confirmed"
-            reservation.save()
-
-            email_context = {
-                "user": user,
-                "transaction": {
-                    "transaction_id": transaction.braintree_transaction_id,
-                    "payment_method": transaction.payment_method,
-                    "amount": transaction.amount,
-                    "created_at": transaction.transaction_date,
-                    "result_message": transaction.braintree_error_message or "Transaction successful",
-                },
-            }
-
-            send_email(subject="Your Transaction Receipt", user=user, email_context=email_context, template="invoice")
-
-            return Response(serializer.data, status=status.HTTP_200_OK)
-        else:
-            transaction.braintree_status = "failed"
-            transaction.braintree_error_message = braintree_result.message
-            transaction.status = "failed"
-            transaction.save()
-
-            return Response(
-                {"error": "Transaction failed", "message": braintree_result.message}, status=status.HTTP_400_BAD_REQUEST
+        if result.is_success:
+            # Save transaction details
+            Transaction.objects.create(
+                reservation=reservation,
+                braintree_transaction_id=result.transaction.id,
+                amount=result.transaction.amount,
+                status=result.transaction.status,
             )
 
-    return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+            # Mark the vehicle as unavailable
+            vehicle.is_available = False
+            vehicle.save()
+
+            return Response({"message": "Reservation and payment successful!"}, status=status.HTTP_201_CREATED)
+        else:
+            # Delete the reservation if payment fails
+            reservation.delete()
+            return Response({"error": result.message}, status=status.HTTP_400_BAD_REQUEST)
+
+    except Vehicle.DoesNotExist:
+        return Response({"error": "Vehicle not found."}, status=status.HTTP_404_NOT_FOUND)
+    except ValueError as e:
+        return Response({"error": f"Invalid date format: {e}"}, status=status.HTTP_400_BAD_REQUEST)
+    except Exception as e:
+        return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
 @api_view(["POST"])
-@permission_classes([permissions.IsAuthenticated])
-def create_reservation(request):
+@permission_classes([IsAuthenticated])
+def cancel_reservation(request, reservation_id):
     user = request.user
-    serializer = ReservationSerializer(data=request.data)
-
-    if serializer.is_valid():
-        reservation = serializer.save(user=user)
-
-        vehicle = reservation.vehicle
-        conflicting_reservations = Reservation.objects.filter(
-            vehicle=vehicle,
-            reserved_from__lt=reservation.reserved_until,
-            reserved_until__gt=reservation.reserved_from,
-            status="confirmed",
-        )
-
-        if conflicting_reservations.exists():
-            return Response(
-                {"error": "This vehicle is already reserved during the selected time period."},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
-        return Response(serializer.data, status=status.HTTP_201_CREATED)
-
-    return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-
-
-@api_view(["GET"])
-@permission_classes([permissions.IsAuthenticated])
-def list_user_invoices(request):
-    user = request.user
-
-    reservations = Reservation.objects.filter(user=user, status="confirmed")
-
-    result = []
-
-    for reservation in reservations:
-        transactions = Transaction.objects.filter(reservation=reservation, status="completed")
-        reservation_data = ReservationSerializer(reservation).data
-        transaction_data = TransactionSerializer(transactions, many=True).data
-        reservation_data["transactions"] = transaction_data
-        result.append(reservation_data)
-
-    return Response(result, status=200)
-
-
-@api_view(["GET"])
-@permission_classes([permissions.IsAuthenticated])
-def search_user_reservations(request, user_id):
-    user: UserAccount = request.user
-
-    if not user.groups.filter(name__in=["Administrator", "Manager", "Employee"]).exists():
-        return Response({"error": "You do not have permission to perform this action."}, status=403)
-
-    target_user = UserAccount.objects.get(id=user_id)
-
-    reservations = Reservation.objects.filter(user=target_user)
-
-    result = []
-
-    for reservation in reservations:
-        transactions = Transaction.objects.filter(reservation=reservation, status="completed")
-        reservation_data = ReservationSerializer(reservation).data
-        transaction_data = TransactionSerializer(transactions, many=True).data
-        reservation_data["transactions"] = transaction_data
-        result.append(reservation_data)
-
-    return Response(result, status=200)
-
-
-@api_view(["GET"])
-@permission_classes([permissions.IsAuthenticated])
-def period_income_report(request):
-    user: UserAccount = request.user
-
-    if not user.groups.filter(name__in=["Administrator", "Manager"]).exists():
-        return Response(
-            {"error": "You do not have permission to perform this action."}, status=status.HTTP_403_FORBIDDEN
-        )
-
-    start_date_str = request.query_params.get("start_date")
-    end_date_str = request.query_params.get("end_date")
-
-    if not start_date_str or not end_date_str:
-        return Response({"error": "Please provide both start_date and end_date."}, status=status.HTTP_400_BAD_REQUEST)
 
     try:
-        start_date = datetime.strptime(start_date_str, "%Y-%m-%d")
-        end_date = datetime.strptime(end_date_str, "%Y-%m-%d")
-    except ValueError:
-        return Response({"error": "Invalid date format. Use YYYY-MM-DD."}, status=status.HTTP_400_BAD_REQUEST)
+        reservation = Reservation.objects.get(id=reservation_id, user=user)
 
-    transactions = Transaction.objects.filter(
-        transaction_date__gte=start_date, transaction_date__lte=end_date, status="completed"
-    )
+        if reservation.is_canceled:
+            return Response({"error": "Reservation is already canceled."}, status=status.HTTP_400_BAD_REQUEST)
 
-    total_income = transactions.aggregate(total=Sum("amount"))["total"] or 0.00
+        reservation.cancel_reservation()
 
-    most_requested_car = (
-        Reservation.objects.filter(reserved_from__gte=start_date, reserved_until__lte=end_date, status="confirmed")
-        .values("vehicle__name")
+        return Response({"message": "Reservation canceled successfully."}, status=status.HTTP_200_OK)
+
+    except Reservation.DoesNotExist:
+        return Response({"error": "Reservation not found."}, status=status.HTTP_404_NOT_FOUND)
+    except Exception as e:
+        return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def list_reservations(request):
+    # Optional filters
+    start_date = request.query_params.get("start_date")
+    end_date = request.query_params.get("end_date")
+    s = request.query_params.get("status")
+
+    # Build the queryset
+    if request.user.role == "ADMINISTRATOR" or request.user.role == "MANAGER":
+        queryset = Reservation.objects.all()
+    else:
+        queryset = Reservation.objects.filter(user=request.user)
+
+    if start_date:
+        queryset = queryset.filter(start_date__gte=start_date)
+    if end_date:
+        queryset = queryset.filter(end_date__lte=end_date)
+    if s:
+        if s.lower() == "active":
+            queryset = queryset.filter(is_active=True, is_canceled=False)
+        elif s.lower() == "canceled":
+            queryset = queryset.filter(is_canceled=True)
+
+    # Serialize and return the data
+    serializer = ReservationSerializer(queryset, many=True)
+    return Response(serializer.data, status=status.HTTP_200_OK)
+
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def list_transactions(request):
+    # Optional filters
+    start_date = request.query_params.get("start_date")
+    end_date = request.query_params.get("end_date")
+
+    # Build the queryset
+    queryset = Transaction.objects.all()
+
+    if request.user.role == "ADMINISTRATOR" or request.user.role == "MANAGER":
+        queryset = Transaction.objects.all()
+    else:
+        queryset = Transaction.objects.filter(reservation__user=request.user)
+
+    if start_date:
+        queryset = queryset.filter(reservation__start_date__gte=start_date)
+    if end_date:
+        queryset = queryset.filter(reservation__end_date__lte=end_date)
+
+    # Serialize and return the data
+    serializer = TransactionSerializer(queryset, many=True)
+    return Response(serializer.data, status=status.HTTP_200_OK)
+
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def generate_report(request):
+    # Optional filters
+    start_date = request.query_params.get("start_date")
+    end_date = request.query_params.get("end_date")
+
+    # Filter reservations by date range if provided
+    reservations = Reservation.objects.all()
+    if start_date:
+        reservations = reservations.filter(start_date__gte=start_date)
+    if end_date:
+        reservations = reservations.filter(end_date__lte=end_date)
+
+    # 1. Most Requested Cars (Top 3)
+    top_cars = (
+        reservations.values("vehicle__id", "vehicle__name")
         .annotate(request_count=Count("vehicle"))
-        .order_by("-request_count")
-        .first()
+        .order_by("-request_count")[:3]
     )
 
-    most_requested_car_data = {
-        "vehicle_name": most_requested_car["vehicle__name"] if most_requested_car else "N/A",
-        "request_count": most_requested_car["request_count"] if most_requested_car else 0,
-    }
+    # 2. Attach Vehicle Details (Mileage, Description)
+    top_cars_with_details = []
+    for car in top_cars:
+        vehicle_id = car["vehicle__id"]
+        try:
+            vehicle_details = VehicleDetails.objects.get(vehicle_id=vehicle_id)
+            vehicle_data = {
+                "vehicle_name": car["vehicle__name"],
+                "request_count": car["request_count"],
+                "vehicle_details": VehicleDetailsSerializer(vehicle_details).data,
+            }
+            top_cars_with_details.append(vehicle_data)
+        except VehicleDetails.DoesNotExist:
+            # If no vehicle details are found, append car data without it
+            vehicle_data = {
+                "vehicle_name": car["vehicle__name"],
+                "request_count": car["request_count"],
+                "vehicle_details": "No details available",
+            }
+            top_cars_with_details.append(vehicle_data)
 
+    # 3. Total Income
+    transactions = Transaction.objects.filter(reservation__in=reservations)
+    total_income = transactions.aggregate(total_income=Sum("amount"))["total_income"] or 0
+
+    # Build the report data
     report_data = {
+        "most_requested_cars": top_cars_with_details,
         "total_income": total_income,
-        "start_date": start_date_str,
-        "end_date": end_date_str,
-        "total_transactions": transactions.count(),
-        "most_requested_car": most_requested_car_data,
     }
 
     return Response(report_data, status=status.HTTP_200_OK)
+
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def top_frequent_clients(request):
+    # Get the top 5 users with the most reservations
+    top_clients = UserAccount.objects.annotate(reservation_count=Count("reservation")).order_by("-reservation_count")[
+        :5
+    ]
+
+    clients_data = []
+
+    for client in top_clients:
+        # Get all transactions for the client's reservations
+        transactions = Transaction.objects.filter(reservation__user=client)
+
+        # Serialize the transactions
+        serialized_transactions = TransactionSerializer(transactions, many=True).data
+
+        # Add the client and their transaction history to the response data
+        clients_data.append(
+            {
+                "client": {
+                    "id": client.id,
+                    "email": client.email,
+                    "first_name": client.first_name,
+                    "last_name": client.last_name,
+                    "reservation_count": client.reservation_count,
+                },
+                "transactions": serialized_transactions,
+            }
+        )
+
+    return Response(clients_data)

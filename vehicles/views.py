@@ -1,408 +1,139 @@
 from rest_framework.decorators import api_view, permission_classes
-from django.shortcuts import get_object_or_404
+from rest_framework.permissions import IsAuthenticated, AllowAny
+from .serializers import VehicleSerializer, VehicleDetailsSerializer
 from rest_framework.response import Response
-from user_accounts.models import UserAccount
-from rest_framework import permissions
+from .models import Vehicle, VehicleDetails
 from rest_framework import status
-from . import serializers, models
-from datetime import datetime
+from rest_framework.pagination import PageNumberPagination
+from django.db import transaction
 
 
+@transaction.atomic
 @api_view(["POST"])
-@permission_classes([permissions.IsAuthenticated])
-def create_vehicle_brand(request):
-    user: UserAccount = request.user
-
-    if not user.groups.filter(name__in=["Administrator", "Manager"]).exists():
-        return Response(
-            {"error": "You do not have permission to perform this action"}, status=status.HTTP_403_FORBIDDEN
-        )
-
-    serializer = serializers.VehicleBrandSerializer(data=request.data)
-    if serializer.is_valid():
-        serializer.save()
-        return Response(serializer.data, status=status.HTTP_201_CREATED)
-    return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-
-
-@api_view(["PATCH", "PUT"])
-@permission_classes([permissions.IsAuthenticated])
-def update_vehicle_brand(request, brandId):
-    user: UserAccount = request.user
-
-    if not user.groups.filter(name__in=["Administrator", "Manager"]).exists():
-        return Response(
-            {"error": "You do not have permission to perform this action"}, status=status.HTTP_403_FORBIDDEN
-        )
-
-    brand = get_object_or_404(models.VehicleBrand, id=brandId)
-    serializer = serializers.VehicleBrandSerializer(brand, data=request.data, partial=True)
-    if serializer.is_valid():
-        serializer.save()
-        return Response(serializer.data)
-    return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-
-
-@api_view(["GET"])
-@permission_classes([permissions.IsAuthenticated])
-def get_vehicle_brands(request):
-    brandId = request.query_params.get("brandId", None)
-
-    if brandId:
-        brand = get_object_or_404(models.VehicleBrand, id=brandId)
-        if brand.is_deleted:
-            if not request.user.groups.filter(name__in=["Administrator", "Manager"]).exists():
-                return Response(
-                    {"error": "You do not have permission to access deleted items."}, status=status.HTTP_403_FORBIDDEN
-                )
-
-        serializer = serializers.VehicleBrandSerializer(brand)
-        return Response(serializer.data)
-
-    brands = models.VehicleBrand.objects.filter(is_deleted=False)
-    serializer = serializers.VehicleBrandSerializer(brands, many=True)
-    return Response(serializer.data)
-
-
-@api_view(["DELETE"])
-@permission_classes([permissions.IsAuthenticated])
-def delete_vehicle_brand(request, brandId):
-    user: UserAccount = request.user
-
-    if not user.groups.filter(name__in=["Administrator", "Manager"]).exists():
-        return Response(
-            {"error": "You do not have permission to perform this action"}, status=status.HTTP_403_FORBIDDEN
-        )
-
-    brand = get_object_or_404(models.VehicleBrand, id=brandId)
-    brand.is_deleted = True
-    brand.save()
-    return Response(status=status.HTTP_204_NO_CONTENT)
-
-
-@api_view(["POST"])
-@permission_classes([permissions.IsAuthenticated])
-def create_vehicle_model(request):
-    user: UserAccount = request.user
-
-    if not user.groups.filter(name__in=["Administrator", "Manager"]).exists():
-        return Response(
-            {"error": "You do not have permission to perform this action"}, status=status.HTTP_403_FORBIDDEN
-        )
-
-    serializer = serializers.VehicleModelSerializer(data=request.data)
-    if serializer.is_valid():
-        try:
-            models.VehicleBrand.objects.get(id=request.data["brand"], is_deleted=False)
-        except models.VehicleBrand.DoesNotExist:
-            return Response(
-                {"error": "The specified brand does not exist or has been deleted."}, status=status.HTTP_400_BAD_REQUEST
-            )
-
-        serializer.save()
-        return Response(serializer.data, status=status.HTTP_201_CREATED)
-
-    return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-
-
-@api_view(["PATCH", "PUT"])
-@permission_classes([permissions.IsAuthenticated])
-def update_vehicle_model(request, modelId):
-    user: UserAccount = request.user
-
-    if not user.groups.filter(name__in=["Administrator", "Manager"]).exists():
-        return Response(
-            {"error": "You do not have permission to perform this action"}, status=status.HTTP_403_FORBIDDEN
-        )
-
-    model = get_object_or_404(models.VehicleModel, id=modelId)
-    serializer = serializers.VehicleModelSerializer(model, data=request.data, partial=True)
-
-    if serializer.is_valid():
-        if "brand" in request.data:
-            try:
-                models.VehicleBrand.objects.get(id=request.data["brand"], is_deleted=False)
-            except models.VehicleBrand.DoesNotExist:
-                return Response(
-                    {"error": "The specified brand does not exist or has been deleted."},
-                    status=status.HTTP_400_BAD_REQUEST,
-                )
-
-        serializer.save()
-        return Response(serializer.data)
-
-    return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-
-
-@api_view(["GET"])
-@permission_classes([permissions.IsAuthenticated])
-def get_vehicle_models(request):
-    modelId = request.query_params.get("modelId", None)
-
-    if modelId:
-        res = get_object_or_404(models.VehicleModel, id=modelId)
-        if res.is_deleted:
-            if not request.user.groups.filter(name__in=["Administrator", "Manager"]).exists():
-                return Response(
-                    {"error": "You do not have permission to access deleted items."}, status=status.HTTP_403_FORBIDDEN
-                )
-
-        serializer = serializers.VehicleModelSerializer(res)
-        return Response(serializer.data)
-
-    res = models.VehicleModel.objects.filter(is_deleted=False)
-    serializer = serializers.VehicleModelSerializer(res, many=True)
-    return Response(serializer.data)
-
-
-@api_view(["DELETE"])
-@permission_classes([permissions.IsAuthenticated])
-def delete_vehicle_model(request, modelId):
-    user: UserAccount = request.user
-
-    if not user.groups.filter(name__in=["Administrator", "Manager"]).exists():
-        return Response(
-            {"error": "You do not have permission to perform this action"}, status=status.HTTP_403_FORBIDDEN
-        )
-
-    model = get_object_or_404(models.VehicleModel, id=modelId)
-    model.is_deleted = True
-    model.save()
-    return Response(status=status.HTTP_204_NO_CONTENT)
-
-
-@api_view(["POST"])
-@permission_classes([permissions.IsAuthenticated])
+@permission_classes([IsAuthenticated])
 def create_vehicle(request):
-    user: UserAccount = request.user
+    user = request.user
 
-    if not user.groups.filter(name__in=["Administrator", "Manager"]).exists():
+    if user.role != "ADMINISTRATOR" and user.role != "MANAGER":
         return Response(
-            {"error": "You do not have permission to perform this action"}, status=status.HTTP_403_FORBIDDEN
+            {"error": "You do not have permission to perform this action."}, status=status.HTTP_403_FORBIDDEN
         )
 
-    serializer = serializers.VehicleSerializer(data=request.data)
-    if serializer.is_valid():
-        serializer.save()
-        return Response(serializer.data, status=status.HTTP_201_CREATED)
-    return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+    data = request.data
+    serializer = VehicleSerializer(data=data)
+
+    serializer.is_valid(raise_exception=True)
+
+    serializer.save()
+
+    VehicleDetails.objects.create(vehicle=serializer.instance)
+
+    return Response(serializer.data, status=status.HTTP_201_CREATED)
 
 
 @api_view(["GET"])
-@permission_classes([permissions.IsAuthenticated])
-def get_vehicles(request):
-    vehicleId = request.query_params.get("vehicleId", None)
+@permission_classes([IsAuthenticated])
+def list_vehicles(request):
     name_contains = request.query_params.get("name_contains", None)
-    from_date = request.query_params.get("from_date", None)
-    to_date = request.query_params.get("to_date", None)
 
-    if vehicleId:
-        vehicle = get_object_or_404(models.Vehicle, id=vehicleId)
-        if vehicle.is_deleted:
-            if not request.user.groups.filter(name__in=["Administrator", "Manager"]).exists():
-                return Response(
-                    {"error": "You do not have permission to access deleted items."}, status=status.HTTP_403_FORBIDDEN
-                )
-        serializer = serializers.VehicleSerializer(vehicle)
-        return Response(serializer.data)
-
-    vehicles = models.Vehicle.objects.filter(is_deleted=False)
+    vehicles = Vehicle.objects.filter(is_deleted=False)
 
     if name_contains:
         vehicles = vehicles.filter(name__icontains=name_contains)
 
-    if from_date or to_date:
-        try:
-            if from_date:
-                from_date_obj = datetime.strptime(from_date, "%Y-%m-%d").date()
-            if to_date:
-                to_date_obj = datetime.strptime(to_date, "%Y-%m-%d").date()
-        except ValueError:
-            return Response({"error": "Invalid date format. Use YYYY-MM-DD."}, status=status.HTTP_400_BAD_REQUEST)
+    paginator = PageNumberPagination()
+    paginated_vehicles = paginator.paginate_queryset(vehicles, request)
 
-        if from_date and to_date:
-            vehicles = vehicles.filter(available_from__lte=from_date_obj, available_until__gte=to_date_obj)
-        elif from_date:
-            vehicles = vehicles.filter(available_from__lte=from_date_obj)
-        elif to_date:
-            vehicles = vehicles.filter(available_until__gte=to_date_obj)
-    serializer = serializers.VehicleSerializer(vehicles, many=True)
-    return Response(serializer.data)
+    serializer = VehicleSerializer(paginated_vehicles, many=True)
+
+    return paginator.get_paginated_response(serializer.data)
 
 
-@api_view(["PATCH", "PUT"])
-@permission_classes([permissions.IsAuthenticated])
-def update_vehicle(request, vehicleId):
-    user: UserAccount = request.user
+@api_view(["PUT", "PATCH"])
+@permission_classes([AllowAny])
+def update_vehicle(request, vehicle_id):
+    user = request.user
+    vehicle = Vehicle.objects.filter(id=vehicle_id).first()
 
-    if not user.groups.filter(name__in=["Administrator", "Manager"]).exists():
+    if user.role != "ADMINISTRATOR" and user.role != "MANAGER":
         return Response(
-            {"error": "You do not have permission to perform this action"}, status=status.HTTP_403_FORBIDDEN
+            {"error": "You do not have permission to perform this action."}, status=status.HTTP_403_FORBIDDEN
         )
 
-    vehicle = get_object_or_404(models.Vehicle, id=vehicleId)
-    serializer = serializers.VehicleSerializer(vehicle, data=request.data, partial=True)
-    if serializer.is_valid():
-        serializer.save()
-        return Response(serializer.data)
-    return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+    if vehicle is None:
+        return Response({"error": "Vehicle not found."}, status=status.HTTP_404_NOT_FOUND)
+
+    data = request.data
+    serializer = VehicleSerializer(instance=vehicle, data=data, partial=True)
+
+    serializer.is_valid(raise_exception=True)
+    serializer.save()
+
+    return Response(serializer.data, status=status.HTTP_200_OK)
 
 
 @api_view(["DELETE"])
-@permission_classes([permissions.IsAuthenticated])
-def delete_vehicle(request, vehicleId):
-    user: UserAccount = request.user
+@permission_classes([IsAuthenticated])
+def delete_vehicle(request, vehicle_id):
+    user = request.user
+    vehicle = Vehicle.objects.filter(id=vehicle_id).first()
 
-    if not user.groups.filter(name__in=["Administrator", "Manager"]).exists():
+    if user.role != "ADMINISTRATOR" and user.role != "MANAGER":
         return Response(
-            {"error": "You do not have permission to perform this action"}, status=status.HTTP_403_FORBIDDEN
+            {"error": "You do not have permission to perform this action."}, status=status.HTTP_403_FORBIDDEN
         )
 
-    vehicle = get_object_or_404(models.Vehicle, id=vehicleId)
+    if vehicle is None:
+        return Response({"error": "Vehicle not found."}, status=status.HTTP_404_NOT_FOUND)
+
     vehicle.is_deleted = True
+    vehicle.is_available = False
     vehicle.save()
+
     return Response(status=status.HTTP_204_NO_CONTENT)
-
-
-@api_view(["POST"])
-@permission_classes([permissions.IsAuthenticated])
-def create_pricing(request):
-    user: UserAccount = request.user
-
-    if not user.groups.filter(name__in=["Administrator", "Manager"]).exists():
-        return Response(
-            {"error": "You do not have permission to perform this action"}, status=status.HTTP_403_FORBIDDEN
-        )
-
-    serializer = serializers.PricingSerializer(data=request.data)
-    if serializer.is_valid():
-        serializer.save()
-        return Response(serializer.data, status=status.HTTP_201_CREATED)
-    return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-
-
-@api_view(["PATCH", "PUT"])
-@permission_classes([permissions.IsAuthenticated])
-def update_pricing(request, pricingId):
-    user: UserAccount = request.user
-
-    if not user.groups.filter(name__in=["Administrator", "Manager"]).exists():
-        return Response(
-            {"error": "You do not have permission to perform this action"}, status=status.HTTP_403_FORBIDDEN
-        )
-
-    pricing = get_object_or_404(models.Pricing, id=pricingId)
-    serializer = serializers.PricingSerializer(pricing, data=request.data, partial=True)
-    if serializer.is_valid():
-        serializer.save()
-        return Response(serializer.data)
-    return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
 @api_view(["GET"])
-@permission_classes([permissions.IsAuthenticated])
-def get_pricings(request):
-    pricingId = request.query_params.get("pricingId", None)
+@permission_classes([IsAuthenticated])
+def get_vehicle_details(request, vehicle_id):
+    vehicle = Vehicle.objects.filter(id=vehicle_id).first()
 
-    if pricingId:
-        pricing = get_object_or_404(models.Pricing, id=pricingId)
-        if pricing.is_deleted:
-            if not request.user.groups.filter(name__in=["Administrator", "Manager"]).exists():
-                return Response(
-                    {"error": "You do not have permission to access deleted items."}, status=status.HTTP_403_FORBIDDEN
-                )
+    if vehicle is None:
+        return Response({"error": "Vehicle not found."}, status=status.HTTP_404_NOT_FOUND)
 
-        serializer = serializers.PricingSerializer(pricing)
-        return Response(serializer.data)
+    vehicle_details = VehicleDetails.objects.filter(vehicle=vehicle).first()
 
-    pricings = models.Pricing.objects.filter(is_deleted=False)
-    serializer = serializers.PricingSerializer(pricings, many=True)
-    return Response(serializer.data)
+    if vehicle_details is None:
+        return Response({"error": "Vehicle details not found."}, status=status.HTTP_404_NOT_FOUND)
+
+    serializer = VehicleDetailsSerializer(vehicle_details)
+
+    return Response(serializer.data, status=status.HTTP_200_OK)
 
 
-@api_view(["DELETE"])
-@permission_classes([permissions.IsAuthenticated])
-def delete_pricing(request, pricingId):
-    user: UserAccount = request.user
+@api_view(["PUT", "PATCH"])
+@permission_classes([IsAuthenticated])
+def update_vehicle_details(request, vehicle_id):
+    user = request.user
+    vehicle = Vehicle.objects.filter(id=vehicle_id).first()
 
-    if not user.groups.filter(name__in=["Administrator", "Manager"]).exists():
+    if user.role != "ADMINISTRATOR" and user.role != "MANAGER":
         return Response(
-            {"error": "You do not have permission to perform this action"}, status=status.HTTP_403_FORBIDDEN
+            {"error": "You do not have permission to perform this action."}, status=status.HTTP_403_FORBIDDEN
         )
 
-    pricing = get_object_or_404(models.Pricing, id=pricingId)
-    pricing.is_deleted = True
-    pricing.save()
-    return Response(status=status.HTTP_204_NO_CONTENT)
+    if vehicle is None:
+        return Response({"error": "Vehicle not found."}, status=status.HTTP_404_NOT_FOUND)
 
+    vehicle_details = VehicleDetails.objects.filter(vehicle=vehicle).first()
 
-@api_view(["POST"])
-@permission_classes([permissions.IsAuthenticated])
-def create_vehicle_report(request):
-    user: UserAccount = request.user
+    if vehicle_details is None:
+        return Response({"error": "Vehicle details not found."}, status=status.HTTP_404_NOT_FOUND)
 
-    if not user.groups.filter(name__in=["Administrator", "Manager"]).exists():
-        return Response(
-            {"error": "You do not have permission to perform this action"}, status=status.HTTP_403_FORBIDDEN
-        )
+    data = request.data
+    serializer = VehicleDetailsSerializer(instance=vehicle_details, data=data, partial=True)
 
-    serializer = serializers.VehicleReportSerializer(data=request.data)
-    if serializer.is_valid():
-        serializer.save()
-        return Response(serializer.data, status=status.HTTP_201_CREATED)
-    return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+    serializer.is_valid(raise_exception=True)
+    serializer.save()
 
-
-@api_view(["PATCH", "PUT"])
-@permission_classes([permissions.IsAuthenticated])
-def update_vehicle_report(request, reportId):
-    user: UserAccount = request.user
-
-    if not user.groups.filter(name__in=["Administrator", "Manager"]).exists():
-        return Response(
-            {"error": "You do not have permission to perform this action"}, status=status.HTTP_403_FORBIDDEN
-        )
-
-    report = get_object_or_404(models.VehicleReport, id=reportId)
-    serializer = serializers.VehicleReportSerializer(report, data=request.data, partial=True)
-    if serializer.is_valid():
-        serializer.save()
-        return Response(serializer.data)
-    return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-
-
-@api_view(["GET"])
-@permission_classes([permissions.IsAuthenticated])
-def get_vehicle_reports(request):
-    reportId = request.query_params.get("reportId", None)
-
-    if reportId:
-        report = get_object_or_404(models.VehicleReport, id=reportId)
-        if report.is_deleted:
-            if not request.user.groups.filter(name__in=["Administrator", "Manager"]).exists():
-                return Response(
-                    {"error": "You do not have permission to access deleted items."}, status=status.HTTP_403_FORBIDDEN
-                )
-
-        serializer = serializers.VehicleReportSerializer(report)
-        return Response(serializer.data)
-
-    reports = models.VehicleReport.objects.filter(is_deleted=False)
-    serializer = serializers.VehicleReportSerializer(reports, many=True)
-    return Response(serializer.data)
-
-
-@api_view(["DELETE"])
-@permission_classes([permissions.IsAuthenticated])
-def delete_vehicle_report(request, reportId):
-    user: UserAccount = request.user
-
-    if not user.groups.filter(name__in=["Administrator", "Manager"]).exists():
-        return Response(
-            {"error": "You do not have permission to perform this action"}, status=status.HTTP_403_FORBIDDEN
-        )
-
-    report = get_object_or_404(models.VehicleReport, id=reportId)
-    report.is_deleted = True
-    report.save()
-    return Response(status=status.HTTP_204_NO_CONTENT)
+    return Response(serializer.data, status=status.HTTP_200_OK)

@@ -1,45 +1,30 @@
 from rest_framework import serializers
 from .models import Reservation, Transaction
-from vehicles.models import Vehicle
+from vehicles.models import VehicleDetails
+from user_accounts.serializers import UserAccountSerializer
+from vehicles.serializers import VehicleDetailsSerializer, VehicleSerializer
 
 
 class ReservationSerializer(serializers.ModelSerializer):
-    id = serializers.ReadOnlyField()
-    vehicle = serializers.PrimaryKeyRelatedField(queryset=Vehicle.objects.filter(is_deleted=False))
-    user = serializers.PrimaryKeyRelatedField(read_only=True)
+    vehicle = VehicleSerializer()
+    user = UserAccountSerializer()
 
     class Meta:
         model = Reservation
-        fields = [
-            "id",
-            "vehicle",
-            "user",
-            "reserved_from",
-            "reserved_until",
-            "status",
-            "total_cost",
-            "created_at",
-            "updated_at",
-        ]
+        fields = ["id", "user", "vehicle", "start_date", "end_date", "is_active", "is_canceled"]
+
+    def get_vehicle_details(self, obj):
+        vehicle_details = VehicleDetails.objects.get(vehicle=obj.vehicle)
+        return VehicleDetailsSerializer(vehicle_details).data
 
 
 class TransactionSerializer(serializers.ModelSerializer):
-    id = serializers.ReadOnlyField()
-    reservation = serializers.PrimaryKeyRelatedField(queryset=Reservation.objects.filter(is_deleted=False))
-    braintree_transaction_id = serializers.ReadOnlyField()
-    braintree_status = serializers.ReadOnlyField()
-    braintree_error_message = serializers.ReadOnlyField()
+    reservation = ReservationSerializer()
 
     class Meta:
         model = Transaction
-        fields = [
-            "id",
-            "reservation",
-            "payment_method",
-            "amount",
-            "status",
-            "transaction_date",
-            "braintree_transaction_id",
-            "braintree_status",
-            "braintree_error_message",
-        ]
+        fields = ["id", "reservation", "braintree_transaction_id", "amount", "status", "created_at"]
+
+    def get_vehicle_details(self, obj):
+        vehicle_details = VehicleDetails.objects.get(vehicle=obj.reservation.vehicle)
+        return VehicleDetailsSerializer(vehicle_details).data

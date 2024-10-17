@@ -1,0 +1,1 @@
+*/5 * * * * /usr/local/bin/python /vehicles_rental/manage.py update_vehicle_status >> /vehicles_rental/logs/cron.log 2>&1

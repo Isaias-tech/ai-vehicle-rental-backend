@@ -1,198 +1,163 @@
-from .serializers import UserAccountSerializer, UserAccountDetailsSerializer
 from rest_framework.decorators import api_view, permission_classes
-from .models import UserAccount, UserAccountDetails, Role
+from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework_simplejwt.tokens import RefreshToken
+from .serializers import UserAccountSerializer, UserProfileSerializer
+from rest_framework.pagination import PageNumberPagination
 from rest_framework.response import Response
-from django.contrib.auth.models import Group
-from rest_framework import permissions
-from django.db import transaction
+from .models import UserProfile, UserAccount
 from rest_framework import status
+from django.db import transaction
+
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+def logout(request):
+    refresh_token = request.data.get("refresh")
+
+    refresh_token = RefreshToken(refresh_token)
+    refresh_token.blacklist()
+
+    return Response(status=status.HTTP_200_OK)
 
 
 @transaction.atomic
 @api_view(["POST"])
-@permission_classes([permissions.AllowAny])
-def create_user_account(request):
+@permission_classes([AllowAny])
+def register(request):
+    user: UserAccount = request.user
     data = request.data
-    serialized = UserAccountSerializer(data=data)
-    serialized.is_valid(raise_exception=True)
+    serializer = UserAccountSerializer(data=data)
 
-    try:
-        role = Role.objects.filter(name=serialized.validated_data.pop("role")).first()
-        if not role:
-            role = Role.objects.get(name="Client")
+    serializer.is_valid(raise_exception=True)
 
-        user: UserAccount = UserAccount.objects.create_user(**serialized.validated_data)
-        user.role = role
-        user.save()
-
-        userDetails = UserAccountDetails(user=user)
-        userDetails.save()
-
-        user.send_verification_email()
-
-        return Response({"message": "User account created!"}, status=status.HTTP_201_CREATED)
-    except Exception as e:
-        return Response({"message": str(e)}, status=500)
-
-
-@api_view(["GET"])
-@permission_classes([permissions.IsAuthenticated])
-def get_user_accounts(request):
-    try:
-        user: UserAccount = request.user
-
-        if user.groups.filter(name="Client").exists():
-            return Response(
-                {"message": "Forbidden: Clients do not have access to this resource."},
-                status=status.HTTP_403_FORBIDDEN,
-            )
-
-        employee_group = Group.objects.get(name="Employee")
-        client_group = Group.objects.get(name="Client")
-
-        if user.groups.filter(name="Administrator").exists():
-            users = UserAccount.objects.all()
-        elif user.groups.filter(name="Manager").exists():
-            users = UserAccount.objects.filter(role__group__in=[employee_group, client_group])
-        elif user.groups.filter(name="Employee").exists():
-            users = UserAccount.objects.filter(role__group=client_group)
-        else:
-            users = []
-
+    if serializer.validated_data.get("role") == "ADMINISTRATOR" and user.role != "ADMINISTRATOR":
         return Response(
-            [
-                {
-                    "email": u.email,
-                    "first_name": u.first_name,
-                    "last_name": u.last_name,
-                    "date_joined": u.date_joined,
-                    "is_verified": u.is_verified,
-                    "is_active": u.is_active,
-                    "role": u.role.name if u.role else None,
-                }
-                for u in users
-            ],
-            status=200,
+            {"error": "You do not have permission to perform this action."}, status=status.HTTP_403_FORBIDDEN
         )
-    except Exception as e:
-        return Response({"message": str(e)}, status=500)
+    elif serializer.validated_data.get("role") == "MANAGER" and user.role not in ["ADMINISTRATOR"]:
+        return Response(
+            {"error": "You do not have permission to perform this action."}, status=status.HTTP_403_FORBIDDEN
+        )
+    elif serializer.validated_data.get("role") == "EMPLOYEE" and user.role not in ["MANAGER", "ADMINISTRATOR"]:
+        return Response(
+            {"error": "You do not have permission to perform this action."}, status=status.HTTP_403_FORBIDDEN
+        )
+
+    serializer.save()
+
+    profile = UserProfile(user=serializer.instance)
+    profile.save()
+
+    return Response(serializer.data, status=status.HTTP_201_CREATED)
 
 
 @api_view(["GET"])
-@permission_classes([permissions.IsAuthenticated])
-def get_logged_in_user(request):
-    try:
-        user: UserAccount = request.user
-        return Response(UserAccountSerializer(user).data)
-    except Exception as e:
-        return Response({"message": str(e)}, status=500)
+@permission_classes([IsAuthenticated])
+def get_user(request):
+    serializer = UserAccountSerializer(request.user)
+    return Response(serializer.data, status=status.HTTP_200_OK)
 
 
-@api_view(["POST"])
-@permission_classes([permissions.IsAuthenticated])
-def log_out_user(request):
-    try:
-        refresh = request.data.get("refresh")
-        if not refresh:
-            return Response({"message": "Refresh token is required!"})
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def list_users(request):
+    logged_in_user: UserAccount = request.user
+    if logged_in_user.role == "CLIENT":
+        return Response(
+            {"error": "You do not have permission to perform this action."}, status=status.HTTP_403_FORBIDDEN
+        )
+    if logged_in_user.role == "MANAGER":
+        users = UserAccount.objects.filter(role__in=["CLIENT", "EMPLOYEE"], is_active=True)
+    elif logged_in_user.role == "ADMINISTRATOR":
+        users = UserAccount.objects.filter(is_active=True)
+    elif logged_in_user.role == "EMPLOYEE":
+        users = UserAccount.objects.filter(role="CLIENT", is_active=True)
 
-        refresh = RefreshToken(refresh)
-        refresh.blacklist()
+    users = users.order_by("id")
 
-        return Response({"message": "User logged out!"})
-    except Exception as e:
-        return Response({"message": str(e)}, status=500)
+    paginator = PageNumberPagination()
+    paginated_vehicles = paginator.paginate_queryset(users, request)
+
+    serializer = UserAccountSerializer(paginated_vehicles, many=True)
+
+    return paginator.get_paginated_response(serializer.data)
 
 
-@transaction.atomic
 @api_view(["PUT", "PATCH"])
-@permission_classes([permissions.IsAuthenticated])
-def update_user_account(request):
-    data = request.data
+@permission_classes([IsAuthenticated])
+def update_user(request):
     user = request.user
-    serialized = UserAccountSerializer(user, data=data, partial=True)
-    serialized.is_valid(raise_exception=True)
-    try:
-        serialized.save()
-        return Response(serialized.data)
-    except Exception as e:
-        return Response({"message": str(e)}, status=500)
+    data = request.data
+
+    serializer = UserAccountSerializer(user, data=data, partial=True)
+    serializer.is_valid(raise_exception=True)
+    serializer.save()
+
+    return Response(serializer.data, status=status.HTTP_200_OK)
+
+
+@api_view(["PUT", "PATCH"])
+@permission_classes([IsAuthenticated])
+def update_user_by_id(request, user_id: int):
+    logged_in_user: UserAccount = request.user
+    if logged_in_user.role != "ADMINISTRATOR" and logged_in_user.role != "MANAGER":
+        return Response(
+            {"error": "You do not have permission to perform this action."}, status=status.HTTP_403_FORBIDDEN
+        )
+
+    if logged_in_user.role == "MANAGER":
+        user = UserAccount.objects.filter(id=user_id, role__in=["CLIENT", "EMPLOYEE"]).first()
+    else:
+        user = UserAccount.objects.filter(id=user_id).first()
+
+    data = request.data
+    serializer = UserAccountSerializer(user, data=data, partial=True)
+    serializer.is_valid(raise_exception=True)
+    serializer.save()
+
+    return Response(serializer.data, status=status.HTTP_200_OK)
 
 
 @api_view(["DELETE"])
-@permission_classes([permissions.IsAuthenticated])
-def delete_user_account(request):
-    try:
-        user: UserAccount = request.user
-        user.generate_confirmation_token()
-        user.send_delete_verification_email()
-        return Response({"message": "User account confirmation email was sent!"})
-    except Exception as e:
-        return Response({"message": str(e)}, status=500)
+@permission_classes([IsAuthenticated])
+def delete_user(request):
+    user: UserAccount = request.user
+    user.soft_delete()
+    return Response(status=status.HTTP_204_NO_CONTENT)
+
+
+@api_view(["DELETE"])
+@permission_classes([IsAuthenticated])
+def delete_user_by_id(request, user_id: int):
+    logged_in_user: UserAccount = request.user
+    if logged_in_user.role != "ADMINISTRATOR" and logged_in_user.role != "MANAGER":
+        return Response(
+            {"error": "You do not have permission to perform this action."}, status=status.HTTP_403_FORBIDDEN
+        )
+
+    if logged_in_user.role == "MANAGER":
+        user = UserAccount.objects.filter(id=user_id, role__in=["CLIENT", "EMPLOYEE"]).first()
+    else:
+        user = UserAccount.objects.filter(id=user_id).first()
+    user.soft_delete()
+    return Response(status=status.HTTP_204_NO_CONTENT)
 
 
 @api_view(["GET"])
-@permission_classes([permissions.AllowAny])
-def delete_user_account_confirm(request, token):
-    try:
-        if not token:
-            return Response({"message": "Token is required!"})
-        if not UserAccount.objects.filter(confirmation_token=token).exists():
-            return Response({"message": "Invalid token!"})
-
-        user = UserAccount.objects.get(confirmation_token=token)
-        user.soft_delete()
-
-        return Response({"message": "User account deleted!"})
-    except Exception as e:
-        return Response({"message": str(e)}, status=500)
-
-
-@api_view(["GET"])
-@permission_classes([permissions.IsAuthenticated])
+@permission_classes([IsAuthenticated])
 def get_user_profile(request):
-    try:
-        user: UserAccount = request.user
-        profile = UserAccountDetails.objects.get(user=user)
-        if not profile:
-            return Response({"message": "User profile not found!"})
-        return Response(UserAccountDetailsSerializer(profile).data)
-    except Exception as e:
-        return Response({"message": str(e)}, status=500)
+    profile = UserProfile.objects.get(user=request.user)
+    return Response(UserProfileSerializer(profile).data, status=status.HTTP_200_OK)
 
 
-@transaction.atomic
 @api_view(["PUT", "PATCH"])
-@permission_classes([permissions.IsAuthenticated])
+@permission_classes([IsAuthenticated])
 def update_user_profile(request):
-    user: UserAccount = request.user
+    profile = UserProfile.objects.get(user=request.user)
     data = request.data
-    profile = UserAccountDetails.objects.get(user=user)
-    serialized = UserAccountDetailsSerializer(profile, data=data, partial=True)
-    serialized.is_valid(raise_exception=True)
-    try:
-        serialized.save()
-        return Response(serialized.data)
-    except Exception as e:
-        return Response({"message": str(e)}, status=500)
 
+    serializer = UserProfileSerializer(profile, data=data, partial=True)
+    serializer.is_valid(raise_exception=True)
+    serializer.save()
 
-@transaction.atomic
-@api_view(["POST"])
-@permission_classes([permissions.IsAuthenticated])
-def reset_password(request):
-    user: UserAccount = request.user
-    data = request.data
-    old_password = data.get("old_password")
-    new_password = data.get("new_password")
-    if not old_password or not new_password:
-        return Response({"message": "Old password and new password are required!"})
-    if not user.check_password(old_password):
-        return Response({"message": "Invalid old password!"})
-    try:
-        user.set_password(new_password)
-        user.save()
-        return Response({"message": "The password was reset!"})
-    except Exception as e:
-        return Response({"message": str(e)}, status=500)
+    return Response(serializer.data, status=status.HTTP_200_OK)

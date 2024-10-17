@@ -1,60 +1,43 @@
-from . import models
+from .models import Vehicle, VehicleDetails
 from rest_framework import serializers
 
 
-class VehicleBrandSerializer(serializers.ModelSerializer):
-    id = serializers.ReadOnlyField()
-
-    class Meta:
-        model = models.VehicleBrand
-        fields = ["id", "name", "created_at", "updated_at"]
-
-
-class VehicleModelSerializer(serializers.ModelSerializer):
-    id = serializers.ReadOnlyField()
-    brand = serializers.PrimaryKeyRelatedField(queryset=models.VehicleBrand.objects.filter(is_deleted=False))
-
-    class Meta:
-        model = models.VehicleModel
-        fields = ["id", "name", "brand", "created_at", "updated_at"]
-
-
 class VehicleSerializer(serializers.ModelSerializer):
-    id = serializers.ReadOnlyField()
-
     class Meta:
-        model = models.Vehicle
+        model = Vehicle
         fields = [
             "id",
             "name",
+            "make",
             "model",
             "year",
-            "color",
+            "is_available",
             "price",
-            "is_new",
-            "available_from",
-            "available_until",
-            "image1",
-            "image2",
-            "image3",
-            "image4",
+            "price_per_day",
+            "price_per_week",
+            "price_per_month",
+            "picture1",
+            "picture2",
+            "picture3",
+            "picture4",
             "created_at",
             "updated_at",
-            "is_deleted",
         ]
 
 
-class PricingSerializer(serializers.ModelSerializer):
-    id = serializers.ReadOnlyField()
+class VehicleDetailsSerializer(serializers.ModelSerializer):
+    vehicle = VehicleSerializer()
 
     class Meta:
-        model = models.Pricing
-        fields = ["id", "vehicle", "daily_rate", "weekly_rate", "monthly_rate"]
-
-
-class VehicleReportSerializer(serializers.ModelSerializer):
-    id = serializers.ReadOnlyField()
-
-    class Meta:
-        model = models.VehicleReport
-        fields = ["id", "vehicle", "mileage", "condition", "report_date"]
+        model = VehicleDetails
+        fields = [
+            "vehicle",
+            "mileage",
+            "color",
+            "is_new",
+            "is_automatic",
+            "has_air_conditioning",
+            "description",
+            "created_at",
+            "updated_at",
+        ]

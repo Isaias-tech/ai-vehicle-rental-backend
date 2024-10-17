@@ -1,8 +1,7 @@
 from django.contrib.auth.models import AbstractBaseUser, BaseUserManager, PermissionsMixin
-from django.forms import ValidationError
 from django.utils.crypto import get_random_string
-from django.contrib.auth.models import Group
 from utils.send_emails import send_email
+from utils.image_renamer import wrapper
 from django.conf import settings
 from django.db import models
 
@@ -16,7 +15,6 @@ class UserAccountManager(BaseUserManager):
 
         user = self.model(email=self.normalize_email(email), **kwargs)
 
-        user.generate_confirmation_token()
         user.set_password(password)
         user.save(using=self._db)
 
@@ -34,28 +32,22 @@ class UserAccountManager(BaseUserManager):
         return user
 
 
-class Role(models.Model):
-    name = models.CharField(max_length=100, unique=True)
-    group = models.OneToOneField(Group, on_delete=models.CASCADE, null=True, blank=True)
-
-    def save(self, *args, **kwargs):
-        if not self.group:
-            group = Group.objects.create(name=self.name)
-            self.group = group
-        super(Role, self).save(*args, **kwargs)
-
-    def __str__(self):
-        return self.name
-
-
 class UserAccount(AbstractBaseUser, PermissionsMixin):
-    role = models.ForeignKey(Role, on_delete=models.CASCADE, null=True, blank=True)
+    ROLES = [
+        ("ADMINISTRATOR", "Administrator"),
+        ("MANAGER", "Manager"),
+        ("EMPLOYEE", "Employee"),
+        ("CLIENT", "Client"),
+    ]
+    id = models.AutoField(primary_key=True)
+    role = models.CharField(max_length=255, choices=ROLES, default="CLIENT")
     email = models.EmailField(unique=True, max_length=500)
-    date_joined = models.DateTimeField(auto_now_add=True)
     first_name = models.CharField(max_length=255)
     last_name = models.CharField(max_length=255)
 
     confirmation_token = models.CharField(max_length=50, blank=True, null=True)
+
+    date_joined = models.DateTimeField(auto_now_add=True)
 
     is_verified = models.BooleanField(default=False)
     is_active = models.BooleanField(default=True)
@@ -70,12 +62,6 @@ class UserAccount(AbstractBaseUser, PermissionsMixin):
 
     def __str__(self):
         return self.email
-
-    def save(self, *args, **kwargs):
-        if self.role and self.role.group:
-            self.groups.clear()
-            self.groups.add(self.role.group)
-        super(UserAccount, self).save(*args, **kwargs)
 
     def generate_confirmation_token(self):
         self.confirmation_token = get_random_string(length=50)
@@ -99,6 +85,7 @@ class UserAccount(AbstractBaseUser, PermissionsMixin):
 
     def soft_delete(self):
         self.is_active = False
+        self.is_verified = False
         self.confirmation_token = None
         self.email = self.email + "_deleted_" + get_random_string(10)
         self.save()
@@ -111,25 +98,20 @@ class UserAccount(AbstractBaseUser, PermissionsMixin):
         self.save()
 
 
-def wrapper(instance, filename):
-    ext = filename.split(".")[-1].lower()
-
-    if ext not in ["jpg", "png", "jpeg"]:
-        raise ValidationError(f"invalid image extension: {filename}")
-
-    filename = f"profile_pictures/{get_random_string(50)}.{ext}"
-    return filename
-
-
-class UserAccountDetails(models.Model):
+class UserProfile(models.Model):
     user = models.OneToOneField(UserAccount, on_delete=models.CASCADE, related_name="account_details")
+
+    birth_date = models.DateField(blank=True, null=True)
+    gender = models.CharField(max_length=255, blank=True, null=True)
     profile_picture = models.ImageField(upload_to=wrapper, blank=True, null=True)
 
-    drivers_licence = models.ImageField(upload_to=wrapper, blank=True, null=True)
     passport = models.ImageField(upload_to=wrapper, blank=True, null=True)
-    identity_card = models.ImageField(upload_to=wrapper, blank=True, null=True)
+    drivers_license = models.ImageField(upload_to=wrapper, blank=True, null=True)
+    national_id = models.ImageField(upload_to=wrapper, blank=True, null=True)
 
     phone_number = models.CharField(max_length=255, blank=True, null=True)
+
+    country = models.CharField(max_length=255, blank=True, null=True)
     city = models.CharField(max_length=255, blank=True, null=True)
     address = models.TextField(blank=True, null=True)
 

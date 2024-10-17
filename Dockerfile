@@ -16,6 +16,19 @@ COPY . /vehicles_rental/
 
 RUN python manage.py collectstatic --no-input
 
-EXPOSE 8080
+# Install cron
+RUN apt-get update && apt-get install -y cron
 
-CMD ["bash", "-c", "cd /vehicles_rental/ && python manage.py migrate && gunicorn --chdir /vehicles_rental --bind 0.0.0.0:8080 --access-logfile - --error-logfile - vehicles_rental.wsgi:application"]
+# Copy the cron job configuration
+COPY cronjob /etc/cron.d/vehicles_rental_cron
+
+# Give execution rights on the cron job
+RUN chmod 0644 /etc/cron.d/vehicles_rental_cron
+
+# Apply the cron job
+RUN crontab /etc/cron.d/vehicles_rental_cron
+
+RUN touch /vehicles_rental/logs/cron.log
+
+# Ensure cron is started and the Django app runs
+CMD ["bash", "-c", "cd /vehicles_rental/ && python manage.py migrate && cron && gunicorn --chdir /vehicles_rental --bind 0.0.0.0:8080 --access-logfile - --error-logfile - vehicles_rental.wsgi:application"]
