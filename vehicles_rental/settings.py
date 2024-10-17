@@ -2,7 +2,6 @@ from django.core.management.utils import get_random_secret_key
 from dotenv import load_dotenv
 from pathlib import Path
 import dj_database_url
-import braintree
 import sys
 import os
 
@@ -46,6 +45,7 @@ INSTALLED_APPS = [
     "storages",
     "user_accounts",
     "vehicles",
+    "reservations",
 ]
 
 MIDDLEWARE = [
@@ -103,16 +103,6 @@ BRAINTREE_ENVIRONMENT = os.getenv("BRAINTREE_ENVIRONMENT")
 BRAINTREE_MERCHANT_ID = os.getenv("BRAINTREE_MERCHANT_ID")
 BRAINTREE_PUBLIC_KEY = os.getenv("BRAINTREE_PUBLIC_KEY")
 BRAINTREE_PRIVATE_KEY = os.getenv("BRAINTREE_PRIVATE_KEY")
-
-# Braintree gateway
-gateway = braintree.BraintreeGateway(
-    braintree.Configuration(
-        braintree.Environment.Sandbox if BRAINTREE_ENVIRONMENT == "Sandbox" else braintree.Environment.Production,
-        merchant_id=BRAINTREE_MERCHANT_ID,
-        public_key=BRAINTREE_PUBLIC_KEY,
-        private_key=BRAINTREE_PRIVATE_KEY,
-    )
-)
 
 # Email backend for production
 EMAIL_BACKEND = "django.core.mail.backends.smtp.EmailBackend"
