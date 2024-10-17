@@ -13,6 +13,14 @@ from django.utils import timezone
 from datetime import datetime
 
 
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def get_braintree_token(request):
+    gateway = get_braintree_gateway()
+    token = gateway.client_token.generate()
+    return Response({"token": token}, status=status.HTTP_200_OK)
+
+
 @api_view(["POST"])
 @permission_classes([IsAuthenticated])
 def create_reservation(request):
