@@ -2,6 +2,7 @@ from rest_framework.decorators import api_view, permission_classes
 from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework_simplejwt.tokens import RefreshToken
 from .serializers import UserAccountSerializer, UserProfileSerializer
+from rest_framework.pagination import PageNumberPagination
 from rest_framework.response import Response
 from .models import UserProfile, UserAccount
 from rest_framework import status
@@ -45,20 +46,27 @@ def get_user(request):
 
 @api_view(["GET"])
 @permission_classes([IsAuthenticated])
-def get_users(request):
+def list_users(request):
     logged_in_user: UserAccount = request.user
     if logged_in_user.role == "CLIENT":
         return Response(
             {"error": "You do not have permission to perform this action."}, status=status.HTTP_403_FORBIDDEN
         )
     if logged_in_user.role == "MANAGER":
-        users = UserAccount.objects.filter(role__in=["CLIENT", "EMPLOYEE"])
+        users = UserAccount.objects.filter(role__in=["CLIENT", "EMPLOYEE"], is_active=True)
     elif logged_in_user.role == "ADMINISTRATOR":
-        users = UserAccount.objects.all()
+        users = UserAccount.objects.filter(is_active=True)
     elif logged_in_user.role == "EMPLOYEE":
-        users = UserAccount.objects.filter(role="CLIENT")
-    serializer = UserAccountSerializer(users, many=True)
-    return Response(serializer.data, status=status.HTTP_200_OK)
+        users = UserAccount.objects.filter(role="CLIENT", is_active=True)
+
+    users = users.order_by("id")
+
+    paginator = PageNumberPagination()
+    paginated_vehicles = paginator.paginate_queryset(users, request)
+
+    serializer = UserAccountSerializer(paginated_vehicles, many=True)
+
+    return paginator.get_paginated_response(serializer.data)
 
 
 @api_view(["PUT", "PATCH"])
