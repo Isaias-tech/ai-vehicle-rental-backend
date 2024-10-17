@@ -43,12 +43,52 @@ def get_user(request):
     return Response(serializer.data, status=status.HTTP_200_OK)
 
 
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def get_users(request):
+    logged_in_user: UserAccount = request.user
+    if logged_in_user.role == "CLIENT":
+        return Response(
+            {"error": "You do not have permission to perform this action."}, status=status.HTTP_403_FORBIDDEN
+        )
+    if logged_in_user.role == "MANAGER":
+        users = UserAccount.objects.filter(role__in=["CLIENT", "EMPLOYEE"])
+    elif logged_in_user.role == "ADMINISTRATOR":
+        users = UserAccount.objects.all()
+    elif logged_in_user.role == "EMPLOYEE":
+        users = UserAccount.objects.filter(role="CLIENT")
+    serializer = UserAccountSerializer(users, many=True)
+    return Response(serializer.data, status=status.HTTP_200_OK)
+
+
 @api_view(["PUT", "PATCH"])
 @permission_classes([IsAuthenticated])
 def update_user(request):
     user = request.user
     data = request.data
 
+    serializer = UserAccountSerializer(user, data=data, partial=True)
+    serializer.is_valid(raise_exception=True)
+    serializer.save()
+
+    return Response(serializer.data, status=status.HTTP_200_OK)
+
+
+@api_view(["PUT", "PATCH"])
+@permission_classes([IsAuthenticated])
+def update_user_by_id(request, user_id: int):
+    logged_in_user: UserAccount = request.user
+    if logged_in_user.role != "ADMINISTRATOR" and logged_in_user.role != "MANAGER":
+        return Response(
+            {"error": "You do not have permission to perform this action."}, status=status.HTTP_403_FORBIDDEN
+        )
+
+    if logged_in_user.role == "MANAGER":
+        user = UserAccount.objects.filter(id=user_id, role__in=["CLIENT", "EMPLOYEE"]).first()
+    else:
+        user = UserAccount.objects.filter(id=user_id).first()
+
+    data = request.data
     serializer = UserAccountSerializer(user, data=data, partial=True)
     serializer.is_valid(raise_exception=True)
     serializer.save()
@@ -72,7 +112,11 @@ def delete_user_by_id(request, user_id: int):
         return Response(
             {"error": "You do not have permission to perform this action."}, status=status.HTTP_403_FORBIDDEN
         )
-    user = UserAccount.objects.filter(id=user_id).first()
+
+    if logged_in_user.role == "MANAGER":
+        user = UserAccount.objects.filter(id=user_id, role__in=["CLIENT", "EMPLOYEE"]).first()
+    else:
+        user = UserAccount.objects.filter(id=user_id).first()
     user.soft_delete()
     return Response(status=status.HTTP_204_NO_CONTENT)
 
