@@ -34,7 +34,7 @@ def register(request):
         return Response(
             {"error": "You do not have permission to perform this action."}, status=status.HTTP_403_FORBIDDEN
         )
-    elif serializer.validated_data.get("role") == "MANAGER" and user.role not in ["ADMINISTRATOR", "MANAGER"]:
+    elif serializer.validated_data.get("role") == "MANAGER" and user.role not in ["ADMINISTRATOR"]:
         return Response(
             {"error": "You do not have permission to perform this action."}, status=status.HTTP_403_FORBIDDEN
         )
