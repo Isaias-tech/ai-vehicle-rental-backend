@@ -87,6 +87,8 @@ def delete_vehicle(request, vehicle_id):
         return Response({"error": "Vehicle not found."}, status=status.HTTP_404_NOT_FOUND)
 
     vehicle.is_deleted = True
+    vehicle.is_available = False
+    vehicle.save()
 
     return Response(status=status.HTTP_204_NO_CONTENT)
 

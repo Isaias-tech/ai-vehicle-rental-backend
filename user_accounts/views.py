@@ -64,6 +64,19 @@ def delete_user(request):
     return Response(status=status.HTTP_204_NO_CONTENT)
 
 
+@api_view(["DELETE"])
+@permission_classes([IsAuthenticated])
+def delete_user_by_id(request, user_id: int):
+    logged_in_user: UserAccount = request.user
+    if logged_in_user.role != "ADMINISTRATOR" and logged_in_user.role != "MANAGER":
+        return Response(
+            {"error": "You do not have permission to perform this action."}, status=status.HTTP_403_FORBIDDEN
+        )
+    user = UserAccount.objects.filter(id=user_id).first()
+    user.soft_delete()
+    return Response(status=status.HTTP_204_NO_CONTENT)
+
+
 @api_view(["GET"])
 @permission_classes([IsAuthenticated])
 def get_user_profile(request):
