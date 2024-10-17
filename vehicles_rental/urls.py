@@ -6,6 +6,7 @@ from django.contrib import admin
 urlpatterns = [
     path("vr_admin/", admin.site.urls),
     path("api/accounts/", include("user_accounts.urls")),
+    path("api/vehicles/", include("vehicles.urls")),
 ]
 
 urlpatterns += static(settings.MEDIA_URL)
