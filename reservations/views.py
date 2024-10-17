@@ -1,5 +1,6 @@
 from rest_framework.decorators import api_view, permission_classes
 from reservations.serializers import ReservationSerializer, TransactionSerializer
+from user_accounts.models import UserAccount
 from vehicles.serializers import VehicleDetailsSerializer
 from utils.braintree_utils import get_braintree_gateway
 from rest_framework.permissions import IsAuthenticated
@@ -152,6 +153,11 @@ def list_transactions(request):
     # Build the queryset
     queryset = Transaction.objects.all()
 
+    if request.user.role == "ADMINISTRATOR" or request.user.role == "MANAGER":
+        queryset = Transaction.objects.all()
+    else:
+        queryset = Transaction.objects.filter(reservation__user=request.user)
+
     if start_date:
         queryset = queryset.filter(reservation__start_date__gte=start_date)
     if end_date:
@@ -215,3 +221,37 @@ def generate_report(request):
     }
 
     return Response(report_data, status=status.HTTP_200_OK)
+
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def top_frequent_clients(request):
+    # Get the top 5 users with the most reservations
+    top_clients = UserAccount.objects.annotate(reservation_count=Count("reservation")).order_by("-reservation_count")[
+        :5
+    ]
+
+    clients_data = []
+
+    for client in top_clients:
+        # Get all transactions for the client's reservations
+        transactions = Transaction.objects.filter(reservation__user=client)
+
+        # Serialize the transactions
+        serialized_transactions = TransactionSerializer(transactions, many=True).data
+
+        # Add the client and their transaction history to the response data
+        clients_data.append(
+            {
+                "client": {
+                    "id": client.id,
+                    "email": client.email,
+                    "first_name": client.first_name,
+                    "last_name": client.last_name,
+                    "reservation_count": client.reservation_count,
+                },
+                "transactions": serialized_transactions,
+            }
+        )
+
+    return Response(clients_data)
